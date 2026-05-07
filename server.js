@@ -6,7 +6,11 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, { 
+    cors: { origin: "*" },
+    // Tăng giới hạn kích thước dữ liệu để truyền âm thanh mượt hơn
+    maxHttpBufferSize: 1e7 
+});
 
 app.use(express.static(__dirname));
 
@@ -14,14 +18,18 @@ let waitingPlayer = null; // Hàng chờ ngẫu nhiên
 let privateRooms = {};    // Lưu trữ phòng riêng: { "123456": socket }
 
 io.on('connection', (socket) => {
+    console.log('Người chơi kết nối:', socket.id);
+
     // 1. Tìm trận ngẫu nhiên
     socket.on('find_match', (data) => {
         socket.playerName = data.name || "Vô danh";
         if (waitingPlayer && waitingPlayer.id !== socket.id) {
             const roomName = `random_${waitingPlayer.id}_${socket.id}`;
             socket.join(roomName); waitingPlayer.join(roomName);
+            
             waitingPlayer.emit('match_found', { room: roomName, side: 'left', opponentName: socket.playerName });
             socket.emit('match_found', { room: roomName, side: 'right', opponentName: waitingPlayer.playerName });
+            
             waitingPlayer = null;
         } else {
             waitingPlayer = socket;
@@ -32,7 +40,7 @@ io.on('connection', (socket) => {
     // 2. Tạo phòng riêng
     socket.on('create_private', (data) => {
         socket.playerName = data.name || "Chủ phòng";
-        const code = Math.floor(100000 + Math.random() * 900000).toString(); // Mã 6 số
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
         privateRooms[code] = socket;
         socket.join(code);
         socket.emit('room_created', { code: code });
@@ -48,22 +56,33 @@ io.on('connection', (socket) => {
             socket.join(code);
             hostSocket.emit('match_found', { room: code, side: 'left', opponentName: socket.playerName });
             socket.emit('match_found', { room: code, side: 'right', opponentName: hostSocket.playerName });
-            delete privateRooms[code]; // Xoá phòng sau khi ghép xong
+            delete privateRooms[code];
         } else {
             socket.emit('error_msg', "Mã phòng không tồn tại hoặc đã đầy!");
         }
     });
 
+    // --- TÍNH NĂNG TRUYỀN ÂM THANH TRỰC TIẾP ---
+    socket.on('audio_stream', (data) => {
+        // Chuyển tiếp buffer âm thanh đến những người khác trong phòng
+        if (data.room) {
+            socket.to(data.room).emit('opponent_voice', { buffer: data.buffer });
+        }
+    });
+
+    // Truyền mức âm lượng (để đẩy thanh Bar)
     socket.on('send_volume', (data) => {
-        socket.to(data.room).emit('opponent_volume', { vol: data.vol });
+        if (data.room) {
+            socket.to(data.room).emit('opponent_volume', { vol: data.vol });
+        }
     });
 
     socket.on('disconnect', () => {
         if (waitingPlayer && waitingPlayer.id === socket.id) waitingPlayer = null;
-        // Xoá mã phòng nếu chủ phòng thoát
         for (let code in privateRooms) {
             if (privateRooms[code].id === socket.id) delete privateRooms[code];
         }
+        console.log('Người chơi thoát:', socket.id);
     });
 });
 
