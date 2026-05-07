@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Battle Chó Sủi Online - Fixed</title>
+    <title>Battle Chó Sủi Online - Voice Chat</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.sound.min.js"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
@@ -23,6 +23,10 @@ const barkWords = ["Gâu!", "Gâuu!!", "Woof!", "Bark!"];
 let inputName, inputCode;
 let myName = "", opponentName = "Đối thủ", privateRoomCode = "";
 
+// Các biến cho hệ thống Voice
+let audioContext;
+let processor;
+
 function preload() {
     imgLeft = loadImage('https://i.ibb.co/v4nskhn8/Ch-tr-i.png');
     imgRight = loadImage('https://i.ibb.co/BK3VfYsG/Ch-ph-i.png');
@@ -36,7 +40,6 @@ function setup() {
 
     inputName = createInput(''); inputName.addClass('game-input');
     inputName.attribute('placeholder', 'Tên của bạn...');
-    
     inputCode = createInput(''); inputCode.addClass('game-input');
     inputCode.attribute('placeholder', 'Mã 6 số...');
     inputCode.hide();
@@ -50,29 +53,77 @@ function setup() {
         currentRoom = data.room; 
         mySide = data.side; 
         opponentName = data.opponentName;
-        barkParticles = []; // Xoá sạch hiệu ứng cũ
+        barkParticles = [];
         gameState = "PLAYING"; 
         barRatio = 0.5; 
         timer = 30;
         inputName.hide(); 
         inputCode.hide();
+        
+        // Bắt đầu truyền âm thanh khi vào trận
+        initVoiceStream();
     });
 
     socket.on('opponent_volume', (data) => { opponentVol = data.vol; });
+    
+    // Nhận âm thanh từ đối thủ và phát lại
+    socket.on('opponent_voice', (data) => {
+        if (gameState === "PLAYING" && audioContext) {
+            let buffer = new Float32Array(data.buffer);
+            playAudioBuffer(buffer);
+        }
+    });
+
     socket.on('error_msg', (msg) => { alert(msg); gameState = "START"; });
 
     textAlign(CENTER, CENTER);
     imageMode(CENTER);
 }
 
-function draw() {
-    // QUAN TRỌNG: Xoá màn hình bằng màu nền trước khi vẽ cái khác
-    background(20); 
+// --- HỆ THỐNG VOICE CHAT ---
+
+function initVoiceStream() {
+    // Khởi tạo AudioContext (yêu cầu tương tác người dùng - đã có qua button)
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
     
-    // Vẽ hình nền
+    // Tạo bộ xử lý âm thanh
+    processor = audioContext.createScriptProcessor(2048, 1, 1);
+    
+    // Kết nối mic vào bộ xử lý
+    let source = audioContext.createMediaStreamSource(mic.stream);
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+
+    processor.onaudioprocess = (e) => {
+        if (gameState === "PLAYING") {
+            let inputData = e.inputBuffer.getChannelData(0);
+            // Chỉ gửi khi có tiếng sủa đủ lớn (>0.02) để tránh lag và echo
+            if (myVol > 0.02) {
+                socket.emit('audio_stream', { 
+                    room: currentRoom, 
+                    buffer: Array.from(inputData) 
+                });
+            }
+        }
+    };
+}
+
+function playAudioBuffer(bufferData) {
+    if (!audioContext) return;
+    let audioBuffer = audioContext.createBuffer(1, bufferData.length, audioContext.sampleRate);
+    audioBuffer.copyToChannel(bufferData, 0);
+    let source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioContext.destination);
+    source.start();
+}
+
+// --- LOGIC VẼ VÀ GAME ---
+
+function draw() {
+    background(20); 
     if (bgImg) image(bgImg, width/2, height/2, width, height);
 
-    // Cập nhật vị trí input
     let cvX = (windowWidth - width) / 2;
     let cvY = (windowHeight - height) / 2;
     inputName.position(cvX + width/2 - 100, cvY + height/2 - 20);
@@ -88,8 +139,8 @@ function draw() {
 function drawStart() {
     fill(0, 220); rect(0, 0, width, height);
     fill(255); textSize(70); textStyle(BOLD); text("BATTLE CHÓ SỦI", width/2, height/2 - 100);
+    fill(255, 200, 0); textSize(20); text("NÊN ĐEO TAI NGHE ĐỂ KHÔNG BỊ HÚ TIẾNG", width/2, height/2 - 150);
     inputName.show(); inputCode.hide();
-    
     drawButton("TÌM NGẪU NHIÊN", width/2 - 220, height/2 + 100, 200, 50, color(46, 204, 113), color(39, 174, 96));
     drawButton("TẠO PHÒNG", width/2, height/2 + 100, 180, 50, color(155, 89, 182), color(142, 68, 173));
     drawButton("VÀO PHÒNG", width/2 + 210, height/2 + 100, 180, 50, color(52, 152, 219), color(41, 128, 185));
@@ -136,10 +187,16 @@ function drawGame() {
     let sR = 160 + (mySide==="right"?myVol:opponentVol)*180;
     image(imgRight, xR, 360, sR, sR);
 
-    // Tên
+    // Tên & Icon Loa
     fill(255); stroke(0); strokeWeight(3); textSize(24);
     text(mySide==="left"?myName:opponentName, xL, 470);
     text(mySide==="right"?myName:opponentName, xR, 470);
+    
+    // Hiển thị icon loa khi đối phương đang nói
+    if (opponentVol > 0.05) {
+        textSize(25); text("🔊", (mySide==="left"?xR:xL), 420);
+    }
+
     fill(255, 255, 0); noStroke(); textSize(18);
     text("(BẠN)", mySide==="left"?xL:xR, 500);
 
@@ -161,6 +218,9 @@ function drawGame() {
 }
 
 function drawResult() {
+    // Ngắt stream khi kết thúc trận
+    if (processor) { processor.disconnect(); processor = null; }
+    
     fill(0, 240); rect(0, 0, width, height);
     let win = (mySide === "left" && barRatio > 0.5) || (mySide === "right" && barRatio < 0.5);
     fill(win ? "#2ecc71" : "#e74c3c"); textSize(80); text(win ? "THẮNG! 🏆" : "THUA! 💀", width/2, height/2 - 50);
