@@ -16,15 +16,27 @@ app.use(express.static(__dirname));
 let waitingPlayer = null;
 
 io.on('connection', (socket) => {
-    socket.on('find_match', () => {
+    socket.on('find_match', (userData) => {
+        // userData chứa { name: "Tên của người chơi" }
+        socket.playerName = userData.name;
+
         if (waitingPlayer && waitingPlayer.id !== socket.id) {
             const roomName = `room_${waitingPlayer.id}_${socket.id}`;
             socket.join(roomName);
             waitingPlayer.join(roomName);
 
-            // Gán vị trí: Một người bên trái (Red), một người bên phải (Blue)
-            waitingPlayer.emit('match_found', { room: roomName, side: 'left' });
-            socket.emit('match_found', { room: roomName, side: 'right' });
+            // Gửi thông tin kèm tên đối thủ
+            waitingPlayer.emit('match_found', { 
+                room: roomName, 
+                side: 'left',
+                opponentName: socket.playerName 
+            });
+            
+            socket.emit('match_found', { 
+                room: roomName, 
+                side: 'right',
+                opponentName: waitingPlayer.playerName 
+            });
             
             waitingPlayer = null;
         } else {
