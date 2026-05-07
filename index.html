@@ -2,20 +2,20 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Battle Chó Sủi Online - Private Room</title>
+    <title>Battle Chó Sủi Online - Fixed UI</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.sound.min.js"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         body { margin: 0; padding: 0; background-color: #1a1a1a; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
         canvas { border: 5px solid #333; border-radius: 15px; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
-        .game-input { position: absolute; padding: 10px; font-size: 18px; border-radius: 5px; border: 2px solid #555; text-align: center; width: 180px; }
+        .game-input { position: absolute; padding: 10px; font-size: 18px; border-radius: 5px; border: 2px solid #555; text-align: center; width: 180px; outline: none; }
     </style>
 </head>
 <body>
 <script>
 let socket, mic, imgLeft, imgRight, bgImg;
-let gameState = "START"; // START, WAITING, INPUT_CODE, PLAYING, RESULT
+let gameState = "START"; 
 let barRatio = 0.5, timer = 30, mySide = "left", currentRoom = "", myVol = 0, opponentVol = 0;
 let barkParticles = [];
 const barkWords = ["Gâu!", "Gâuu!!", "Woof!", "Bark!"];
@@ -31,31 +31,25 @@ function preload() {
 
 function setup() {
     createCanvas(960, 540);
-    socket = io();
+    socket = io(); 
     mic = new p5.AudioIn(); mic.start();
 
     // Input Tên
     inputName = createInput(''); inputName.addClass('game-input');
     inputName.attribute('placeholder', 'Tên của bạn...');
-    inputName.position(windowWidth/2 - 95, windowHeight/2 - 20);
-
-    // Input Mã phòng (ẩn lúc đầu)
+    
+    // Input Mã phòng
     inputCode = createInput(''); inputCode.addClass('game-input');
     inputCode.attribute('placeholder', 'Nhập mã 6 số...');
-    inputCode.position(windowWidth/2 - 95, windowHeight/2 + 30);
     inputCode.hide();
 
-    socket.on('room_created', (data) => {
-        privateRoomCode = data.code;
-        gameState = "WAITING";
-    });
-
+    // Socket listeners
+    socket.on('room_created', (data) => { privateRoomCode = data.code; gameState = "WAITING"; });
     socket.on('match_found', (data) => {
         currentRoom = data.room; mySide = data.side; opponentName = data.opponentName;
         gameState = "PLAYING"; barRatio = 0.5; timer = 30;
         inputName.hide(); inputCode.hide();
     });
-
     socket.on('opponent_volume', (data) => { opponentVol = data.vol; });
     socket.on('error_msg', (msg) => { alert(msg); gameState = "START"; });
 
@@ -63,7 +57,14 @@ function setup() {
 }
 
 function draw() {
+    // Cập nhật vị trí input theo canvas để không bị lệch khi resize trình duyệt
+    let cvX = (windowWidth - width) / 2;
+    let cvY = (windowHeight - height) / 2;
+    inputName.position(cvX + width/2 - 100, cvY + height/2 - 20);
+    inputCode.position(cvX + width/2 - 100, cvY + height/2 + 30);
+
     image(bgImg, width/2, height/2, width, height);
+    
     if (gameState === "START") drawStart();
     else if (gameState === "WAITING") drawWaiting();
     else if (gameState === "INPUT_CODE") drawInputCode();
@@ -72,33 +73,33 @@ function draw() {
 }
 
 function drawStart() {
-    fill(0, 200); rect(0, 0, width, height);
-    fill(255); textSize(60); textStyle(BOLD); text("BATTLE CHÓ SỦI", width/2, height/2 - 100);
+    fill(0, 220); rect(0, 0, width, height);
+    fill(255); textSize(70); textStyle(BOLD); text("BATTLE CHÓ SỦI", width/2, height/2 - 100);
     inputName.show(); inputCode.hide();
     
-    // 3 Nút lựa chọn
     drawButton("TÌM NGẪU NHIÊN", width/2 - 220, height/2 + 100, 200, 50, color(46, 204, 113), color(39, 174, 96));
     drawButton("TẠO PHÒNG", width/2, height/2 + 100, 180, 50, color(155, 89, 182), color(142, 68, 173));
     drawButton("VÀO PHÒNG", width/2 + 210, height/2 + 100, 180, 50, color(52, 152, 219), color(41, 128, 185));
 }
 
 function drawWaiting() {
-    fill(0, 220); rect(0, 0, width, height);
+    fill(0, 230); rect(0, 0, width, height);
     fill(255); textSize(30);
     if (privateRoomCode) {
         text("MÃ PHÒNG CỦA BẠN:", width/2, height/2 - 30);
-        textSize(60); fill(255, 255, 0); text(privateRoomCode, width/2, height/2 + 30);
-        textSize(20); fill(200); text("Gửi mã này cho bạn bè để bắt đầu!", width/2, height/2 + 90);
+        textSize(65); fill(255, 255, 0); text(privateRoomCode, width/2, height/2 + 40);
+        textSize(20); fill(200); text("Gửi mã này cho bạn bè để chiến đấu!", width/2, height/2 + 110);
     } else {
         text("Đang tìm đối thủ ngẫu nhiên...", width/2, height/2);
     }
+    drawButton("HỦY / QUAY LẠI", width/2, height/2 + 180, 200, 45, color(100), color(80));
 }
 
 function drawInputCode() {
-    fill(0, 220); rect(0, 0, width, height);
-    fill(255); textSize(30); text("NHẬP MÃ PHÒNG BẠN BÈ", width/2, height/2 - 60);
+    fill(0, 230); rect(0, 0, width, height);
+    fill(255); textSize(32); text("NHẬP MÃ PHÒNG BẠN BÈ", width/2, height/2 - 60);
     inputCode.show();
-    drawButton("XÁC NHẬN VÀO", width/2, height/2 + 110, 220, 50, color(230, 126, 34), color(211, 84, 0));
+    drawButton("XÁC NHẬN VÀO", width/2, height/2 + 120, 220, 50, color(230, 126, 34), color(211, 84, 0));
     drawButton("QUAY LẠI", 80, 40, 120, 40, color(100), color(80));
 }
 
@@ -106,88 +107,114 @@ function drawGame() {
     myVol = mic.getLevel();
     socket.emit('send_volume', { room: currentRoom, vol: myVol });
 
-    let pushForce = (myVol - opponentVol) * 0.1;
+    let pushForce = (myVol - opponentVol) * 0.12;
     if (mySide === "right") pushForce = -pushForce; 
     barRatio = constrain(barRatio + pushForce, 0.05, 0.95);
 
-    drawHandDrawnBar(width/2 - 250, 30, 500, 35, barRatio);
-    fill(255); stroke(0); strokeWeight(4); textSize(50); text(ceil(timer), width/2, 100);
+    drawHandDrawnBar(width/2 - 250, 35, 500, 35, barRatio);
+    fill(255); stroke(0); strokeWeight(4); textSize(55); text(ceil(timer), width/2, 115);
 
-    let xL = 260 + (barRatio - 0.5) * 200;
-    let xR = 720 + (barRatio - 0.5) * 200;
+    let xL = 260 + (barRatio - 0.5) * 240;
+    let xR = 700 + (barRatio - 0.5) * 240;
 
-    // Chó & Tên
+    // Chó Trái
     push();
-    image(imgLeft, xL, 360, 160 + (mySide==="left"?myVol:opponentVol)*150, 160 + (mySide==="left"?myVol:opponentVol)*150);
-    fill(255); stroke(0); textSize(22); text(mySide==="left"?myName:opponentName, xL, 460);
-    if(mySide==="left") { fill(255,255,0); text("(BẠN)", xL, 485); }
+    let sL = 160 + (mySide==="left"?myVol:opponentVol)*180;
+    image(imgLeft, xL, 360, sL, sL);
+    fill(255); stroke(0); strokeWeight(3); textSize(24); text(mySide==="left"?myName:opponentName, xL, 470);
+    if(mySide==="left") { fill(255,255,0); text("(BẠN)", xL, 500); }
     pop();
 
+    // Chó Phải
     push();
-    image(imgRight, xR, 360, 160 + (mySide==="right"?myVol:opponentVol)*150, 160 + (mySide==="right"?myVol:opponentVol)*150);
-    fill(255); stroke(0); textSize(22); text(mySide==="right"?myName:opponentName, xR, 460);
-    if(mySide==="right") { fill(255,255,0); text("(BẠN)", xR, 485); }
+    let sR = 160 + (mySide==="right"?myVol:opponentVol)*180;
+    image(imgRight, xR, 360, sR, sR);
+    fill(255); stroke(0); strokeWeight(3); textSize(24); text(mySide==="right"?myName:opponentName, xR, 470);
+    if(mySide==="right") { fill(255,255,0); text("(BẠN)", xR, 500); }
     pop();
 
-    // Sủa
-    if (mySide === "left" && myVol > 0.1 && frameCount % 2 == 0) barkParticles.push(new BarkParticle(xL, 300, true));
-    if (mySide === "right" && myVol > 0.1 && frameCount % 2 == 0) barkParticles.push(new BarkParticle(xR, 300, false));
-    if (opponentVol > 0.1 && frameCount % 2 == 0) barkParticles.push(new BarkParticle(mySide === "left" ? xR : xL, 300, mySide === "right"));
-    barkParticles.forEach((p, i) => { p.update(); p.display(); if(p.isDead()) barkParticles.splice(i,1); });
+    // Hiệu ứng hạt sủa
+    if (mySide === "left" && myVol > 0.1 && frameCount % 2 == 0) barkParticles.push(new BarkParticle(xL, 320, true));
+    if (mySide === "right" && myVol > 0.1 && frameCount % 2 == 0) barkParticles.push(new BarkParticle(xR, 320, false));
+    if (opponentVol > 0.1 && frameCount % 2 == 0) barkParticles.push(new BarkParticle(mySide === "left" ? xR : xL, 320, mySide === "right"));
+    
+    for (let i = barkParticles.length - 1; i >= 0; i--) {
+        barkParticles[i].update(); barkParticles[i].display();
+        if (barkParticles[i].isDead()) barkParticles.splice(i, 1);
+    }
 
     if (frameCount % 60 == 0 && timer > 0) timer--;
     if (timer <= 0) gameState = "RESULT";
 }
 
 function drawResult() {
-    fill(0, 220); rect(0, 0, width, height);
+    fill(0, 240); rect(0, 0, width, height);
     let win = (mySide === "left" && barRatio > 0.5) || (mySide === "right" && barRatio < 0.5);
-    fill(win ? "#2ecc71" : "#e74c3c"); textSize(80); text(win ? "THẮNG! 🏆" : "THUA... 💀", width/2, height/2 - 50);
-    drawButton("QUAY LẠI MENU", width/2, height/2 + 80, 220, 60, color(52, 152, 219), color(41, 128, 185));
+    fill(win ? color(46, 204, 113) : color(231, 76, 60));
+    textSize(85); text(win ? "BẠN THẮNG! 🏆" : "BẠN THUA... 💀", width/2, height/2 - 50);
+    drawButton("QUAY LẠI MENU", width/2, height/2 + 100, 250, 60, color(52, 152, 219), color(41, 128, 185));
 }
 
-// --- HÀM VẼ NÚT ---
+// --- HÀM VẼ NÚT CÓ MÀU MẶC ĐỊNH ĐỂ TRÁNH LỖI ---
 function drawButton(txt, x, y, w, h, c1, c2) {
     let hov = mouseX > x-w/2 && mouseX < x+w/2 && mouseY > y-h/2 && mouseY < y+h/2;
-    fill(hov ? c2 : c1); stroke(255); strokeWeight(2); rect(x-w/2, y-h/2, w, h, 8);
-    fill(255); noStroke(); textSize(20); text(txt, x, y);
-    if (hov) cursor(HAND); return hov;
+    // Sửa lỗi: Nếu không truyền màu, dùng màu xám mặc định
+    let col1 = c1 || color(150);
+    let col2 = c2 || color(100);
+    
+    push();
+    translate(x, y);
+    fill(hov ? col2 : col1); 
+    stroke(255); strokeWeight(3); 
+    rect(-w/2, -h/2, w, h, 10);
+    fill(255); noStroke(); textStyle(BOLD); textSize(20); 
+    text(txt, 0, 0);
+    pop();
+    
+    if (hov) cursor(HAND);
+    return hov;
+}
+
+function isMouseInside(x, y, w, h) {
+    return mouseX > x-w/2 && mouseX < x+w/2 && mouseY > y-h/2 && mouseY < y+h/2;
 }
 
 function mousePressed() {
     myName = inputName.value() || "Người chơi";
     
     if (gameState === "START") {
-        if (drawButton("", width/2-220, height/2+100, 200, 50)) { // Ngẫu nhiên
+        if (isMouseInside(width/2-220, height/2+100, 200, 50)) { // Ngẫu nhiên
             userStartAudio(); socket.emit('find_match', { name: myName }); gameState = "WAITING"; privateRoomCode = "";
-        }
-        if (drawButton("", width/2, height/2+100, 180, 50)) { // Tạo phòng
+        } else if (isMouseInside(width/2, height/2+100, 180, 50)) { // Tạo phòng
             userStartAudio(); socket.emit('create_private', { name: myName });
-        }
-        if (drawButton("", width/2+210, height/2+100, 180, 50)) { // Vào phòng
+        } else if (isMouseInside(width/2+210, height/2+100, 180, 50)) { // Vào phòng
             gameState = "INPUT_CODE"; inputName.hide();
         }
-    } else if (gameState === "INPUT_CODE") {
-        if (drawButton("", width/2, height/2+110, 220, 50)) { // Xác nhận mã
-            let code = inputCode.value();
-            if(code.length === 6) {
-                userStartAudio(); socket.emit('join_private', { name: myName, code: code });
-            } else { alert("Mã phải có 6 số!"); }
+    } else if (gameState === "WAITING") {
+        if (isMouseInside(width/2, height/2 + 180, 200, 45)) { // Nút Hủy
+            gameState = "START"; privateRoomCode = ""; socket.disconnect(); socket.connect();
         }
-        if (drawButton("", 80, 40, 120, 40)) gameState = "START";
+    } else if (gameState === "INPUT_CODE") {
+        if (isMouseInside(width/2, height/2+120, 220, 50)) { // Xác nhận mã
+            let code = inputCode.value();
+            if(code.length === 6) { userStartAudio(); socket.emit('join_private', { name: myName, code: code }); }
+            else { alert("Mã phải có 6 số!"); }
+        } else if (isMouseInside(80, 40, 120, 40)) {
+            gameState = "START";
+        }
     } else if (gameState === "RESULT") {
-        if (drawButton("", width/2, height/2+80, 220, 60)) {
+        if (isMouseInside(width/2, height/2+100, 250, 60)) {
             gameState = "START"; privateRoomCode = "";
         }
     }
 }
 
-// --- CÁC HÀM CŨ (drawHandDrawnBar, getWobblyPath, BarkParticle) ---
+// --- LOGIC HẠT CHỮ & THANH ĐẨY ---
 class BarkParticle {
     constructor(x, y, isLeft) {
         this.x = x; this.y = y; this.txt = random(barkWords);
-        this.vx = random(isLeft ? -6 : 2, isLeft ? -2 : 6); this.vy = random(-7, -3); 
-        this.alpha = 255; this.size = random(20, 45); this.angle = random(-0.5, 0.5);
+        this.vx = random(isLeft ? -7 : 2, isLeft ? -2 : 7); this.vy = random(-8, -4); 
+        this.alpha = 255; this.size = random(22, 50); this.angle = random(-0.4, 0.4);
         this.color = random() > 0.5 ? color(255, 50, 0) : color(255, 215, 0);
     }
     update() { this.x += this.vx; this.y += this.vy; this.alpha -= 8; }
@@ -215,7 +242,7 @@ function drawHandDrawnBar(x, y, w, h, ratio) {
     drawingContext.closePath();
     drawingContext.clip(); 
     noStroke(); fill(230, 50, 50); rect(0, -10, splitX, h+20); fill(70, 120, 230); rect(splitX, -10, w-splitX, h+20);
-    stroke(255, 150); drawingContext.setLineDash([5, 5]); line(w/2, -5, w/2, h+5);
+    stroke(255, 180); drawingContext.setLineDash([5, 5]); line(w/2, -5, w/2, h+5);
     pop();
     stroke(60, 40, 20); strokeWeight(4); noFill(); beginShape(); path.forEach(p => vertex(p.x, p.y)); endShape(CLOSE);
     push(); translate(splitX, h/2); stroke(0); fill(255); ellipse(0, 0, 26, 26); fill(0); ellipse(0, 0, 8, 8); pop();
