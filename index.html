@@ -9,6 +9,16 @@
     <style>
         body { margin: 0; padding: 0; background-color: #1a1a1a; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
         canvas { border: 5px solid #333; border-radius: 15px; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
+        /* Style cho ô nhập tên */
+        .name-input {
+            position: absolute;
+            padding: 10px;
+            font-size: 20px;
+            border-radius: 5px;
+            border: none;
+            text-align: center;
+            width: 200px;
+        }
     </style>
 </head>
 <body>
@@ -16,14 +26,19 @@
 let socket;
 let mic;
 let imgLeft, imgRight, bgImg;
-let gameState = "START"; 
+let gameState = "START"; // START, WAITING, PLAYING, RESULT
 let barRatio = 0.5; 
 let timer = 30;
-let mySide = "left"; // "left" hoặc "right"
+let mySide = "left";
 let currentRoom = "";
 let myVol = 0, opponentVol = 0;
 let barkParticles = [];
 const barkWords = ["Gâu!", "Gâuu!!", "Gâu Gâu!", "Woof!", "Bark!"];
+
+// Biến cho tên
+let inputElement;
+let myName = "";
+let opponentName = "Đối thủ";
 
 function preload() {
     imgLeft = loadImage('https://i.ibb.co/v4nskhn8/Ch-tr-i.png');
@@ -32,8 +47,15 @@ function preload() {
 }
 
 function setup() {
-    createCanvas(960, 540);
-    // Khi chạy local dùng 'http://localhost:3000', khi deploy dùng link Render/Vercel
+    let cv = createCanvas(960, 540);
+    
+    // Tạo ô nhập tên bằng HTML/p5
+    inputElement = createInput('');
+    inputElement.attribute('placeholder', 'Nhập tên của bạn...');
+    inputElement.addClass('name-input');
+    // Căn giữa ô nhập liệu vào canvas
+    inputElement.position(windowWidth/2 - 100, windowHeight/2 + 20);
+
     socket = io(); 
     mic = new p5.AudioIn();
     mic.start();
@@ -41,9 +63,11 @@ function setup() {
     socket.on('match_found', (data) => {
         currentRoom = data.room;
         mySide = data.side;
+        opponentName = data.opponentName; // Nhận tên đối thủ từ server
         gameState = "PLAYING";
         barRatio = 0.5;
         timer = 30;
+        inputElement.hide();
     });
 
     socket.on('opponent_volume', (data) => { opponentVol = data.vol; });
@@ -54,6 +78,7 @@ function setup() {
 function draw() {
     cursor(ARROW);
     image(bgImg, width/2, height/2, width, height);
+    
     if (gameState === "START") drawStart();
     else if (gameState === "WAITING") drawWaiting();
     else if (gameState === "PLAYING") drawGame();
@@ -63,13 +88,18 @@ function draw() {
 function drawStart() {
     fill(0, 180); rect(0, 0, width, height);
     fill(255); textSize(70); textStyle(BOLD); text("BATTLE CHÓ SỦI", width/2, height/2 - 80);
-    fill(255, 220, 0); textSize(24); text("Ghép cặp Online - Hét để đẩy đối thủ!", width/2, height/2 - 10);
-    drawButton("TÌM ĐỐI THỦ", width/2, height/2 + 80, 250, 60, color(46, 204, 113), color(39, 174, 96));
+    fill(255, 220, 0); textSize(24); textStyle(NORMAL); text("Nhập tên và bắt đầu sủa!", width/2, height/2 - 20);
+    
+    inputElement.show();
+    
+    // Vẽ nút tìm trận bên dưới ô nhập tên
+    drawButton("TÌM ĐỐI THỦ", width/2, height/2 + 110, 250, 60, color(46, 204, 113), color(39, 174, 96));
 }
 
 function drawWaiting() {
+    inputElement.hide();
     fill(0, 200); rect(0, 0, width, height);
-    fill(255); textSize(30); text("Đang tìm đối thủ...", width/2, height/2);
+    fill(255); textSize(30); text("Đang chờ đối thủ...", width/2, height/2);
     push(); translate(width/2, height/2 + 60); rotate(frameCount * 0.1); stroke(255); noFill(); arc(0, 0, 40, 40, 0, PI); pop();
 }
 
@@ -77,7 +107,6 @@ function drawGame() {
     myVol = mic.getLevel();
     socket.emit('send_volume', { room: currentRoom, vol: myVol });
 
-    // Cập nhật thanh đẩy (Logic: mình hét thì đẩy về phía đối thủ)
     let pushForce = (myVol - opponentVol) * 0.1;
     if (mySide === "right") pushForce = -pushForce; 
     barRatio += pushForce;
@@ -89,19 +118,31 @@ function drawGame() {
     let xL = 260 + (barRatio - 0.5) * 200;
     let xR = 720 + (barRatio - 0.5) * 200;
 
-    // Hiệu ứng sủa
+    // Hiển thị chó và tên
+    let leftLabel = (mySide === "left") ? myName : opponentName;
+    let rightLabel = (mySide === "right") ? myName : opponentName;
+
+    // Vẽ chó trái
+    push();
+    image(imgLeft, xL, 360, 160 + (mySide==="left"?myVol:opponentVol)*150, 160 + (mySide==="left"?myVol:opponentVol)*150);
+    fill(255); stroke(0); strokeWeight(3); textSize(25);
+    text(leftLabel, xL, 460); // Tên ở dưới chân
+    if(mySide === "left") { fill(255, 255, 0); text("(BẠN)", xL, 490); }
+    pop();
+
+    // Vẽ chó phải
+    push();
+    image(imgRight, xR, 360, 160 + (mySide==="right"?myVol:opponentVol)*150, 160 + (mySide==="right"?myVol:opponentVol)*150);
+    fill(255); stroke(0); strokeWeight(3); textSize(25);
+    text(rightLabel, xR, 460);
+    if(mySide === "right") { fill(255, 255, 0); text("(BẠN)", xR, 490); }
+    pop();
+
+    // Hiệu ứng sủa (như cũ)
     if (mySide === "left" && myVol > 0.1 && frameCount % 2 == 0) barkParticles.push(new BarkParticle(xL, 300, true));
     if (mySide === "right" && myVol > 0.1 && frameCount % 2 == 0) barkParticles.push(new BarkParticle(xR, 300, false));
     if (opponentVol > 0.1 && frameCount % 2 == 0) barkParticles.push(new BarkParticle(mySide === "left" ? xR : xL, 300, mySide === "right"));
-
     barkParticles.forEach((p, i) => { p.update(); p.display(); if(p.isDead()) barkParticles.splice(i,1); });
-
-    image(imgLeft, xL, 360, 160 + (mySide==="left"?myVol:opponentVol)*150, 160 + (mySide==="left"?myVol:opponentVol)*150);
-    image(imgRight, xR, 360, 160 + (mySide==="right"?myVol:opponentVol)*150, 160 + (mySide==="right"?myVol:opponentVol)*150);
-
-    // Hiển thị nhãn "BẠN"
-    fill(255, 255, 0); noStroke(); textSize(20);
-    text("BẠN", mySide === "left" ? xL : xR, 460);
 
     if (frameCount % 60 == 0 && timer > 0) timer--;
     if (timer <= 0) gameState = "RESULT";
@@ -115,7 +156,7 @@ function drawResult() {
     drawButton("CHƠI LẠI", width/2, height/2 + 80, 200, 60, color(52, 152, 219), color(41, 128, 185));
 }
 
-// --- COPY HÀM drawButton, drawHandDrawnBar, getWobblyPath, BarkParticle TỪ CODE TRƯỚC ---
+// Các hàm bổ trợ (drawButton, drawHandDrawnBar, getWobblyPath, BarkParticle...) giữ nguyên từ bản trước
 function drawButton(txt, x, y, w, h, c1, c2) {
     let hov = mouseX > x-w/2 && mouseX < x+w/2 && mouseY > y-h/2 && mouseY < y+h/2;
     fill(hov ? c2 : c1); stroke(255); strokeWeight(3); rect(x-w/2, y-h/2, w, h, 10);
@@ -125,8 +166,13 @@ function drawButton(txt, x, y, w, h, c1, c2) {
 
 function mousePressed() {
     if (gameState === "START" || gameState === "RESULT") {
-        if (mouseX > width/2-125 && mouseX < width/2+125 && mouseY > height/2+50 && mouseY < height/2+110) {
-            userStartAudio(); socket.emit('find_match'); gameState = "WAITING";
+        // Kiểm tra bấm nút (Toạ độ nút tìm trận/chơi lại)
+        let btnY = (gameState === "START") ? height/2 + 110 : height/2 + 80;
+        if (mouseX > width/2-125 && mouseX < width/2+125 && mouseY > btnY-30 && mouseY < btnY+30) {
+            myName = inputElement.value() || "Vô danh";
+            userStartAudio(); 
+            socket.emit('find_match', { name: myName }); // Gửi tên lên server
+            gameState = "WAITING";
         }
     }
 }
